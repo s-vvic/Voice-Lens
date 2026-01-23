@@ -1,7 +1,7 @@
 #python 3.12.3
 fastapi
 uvicorn
-google-generativeai
+google-genai
 streamlit
 python-dotenv
 requests
