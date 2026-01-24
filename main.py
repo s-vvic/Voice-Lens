@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
 import uuid
+import ai_service
 
 # create FastAPI app instance
 app = FastAPI(title="Voice-Lens API")
@@ -48,17 +49,19 @@ async def analyze_image(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # ---------------------------------------------------------
-        # [TODO: 팀원 B의 AI 함수 연결할 곳]
-        # logic: 
-        # description = ai_service.get_description(file_path)
-        # ---------------------------------------------------------
 
+        # call the AI service to get image description
+        try:
+            description = ai_service.get_image_description(file_path)
+        except Exception as e:
+            print(f"AI 분석 실패: {e}")
+            description = "죄송합니다. AI 분석 중 오류가 발생했습니다."
         return {
             "status": "success",
             "original_filename": file.filename,
             "saved_filename": unique_filename,
             "file_path": file_path,
+            "description": description,
             "message": "파일이 안전하게 저장되었습니다."
         }
 
