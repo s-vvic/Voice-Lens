@@ -26,7 +26,7 @@ def get_image_description(image_path: str):
 
         # 4. API 호출 (client.models.generate_content 사용)
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',
             contents=[prompt, img]
         )
         
