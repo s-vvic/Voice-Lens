@@ -37,7 +37,7 @@ def get_image_description(image_path: str):
 
         # 4. API 호출 (모델명은 gemini-1.5-flash 또는 gemini-2.0-flash-exp 등 사용 가능)
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.5-flash',
             contents=[prompt, img]
         )
         
