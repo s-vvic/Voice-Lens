@@ -1,7 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import shutil
+from fastapi.concurrency import run_in_threadpool
+import aiofiles
 import os
 import uuid
 import ai_service
@@ -45,15 +46,18 @@ async def analyze_image(request: Request, file: UploadFile = File(...)):
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(file_path, "wb") as out_file:
+            content = await file.read()  # async read file
+            await out_file.write(content)
 
         description = "오류: AI 분석에 실패했습니다."
         audio_url = None
 
         try:
-            description = ai_service.get_image_description(file_path)
-            audio_path = text_to_speech(description)  # Returns "temp_audio/filename.mp3"
+            # Run blocking I/O functions in a separate thread pool
+            description = await run_in_threadpool(ai_service.get_image_description, file_path)
+            audio_path = await run_in_threadpool(text_to_speech, description)
+            
             audio_filename = os.path.basename(audio_path)
             # Construct full URL: http://.../audio/filename.mp3
             audio_url = f"{str(request.base_url).rstrip('/')}/audio/{audio_filename}"

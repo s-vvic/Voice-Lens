@@ -8,8 +8,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def text_to_speech(text: str, lang: str = "ko") -> str:
     """
-    더미 텍스트를 mp3 파일로 변환하는 TTS 모듈
-    (FastAPI 연동 전 단독 테스트용)
+    텍스트를 mp3 파일로 변환하는 TTS 모듈.
+    각 호출마다 고유한 파일명을 생성하여 덮어쓰기 문제를 방지합니다.
     """
     filename = f"{uuid.uuid4()}.mp3"
     path = os.path.join(OUTPUT_DIR, filename)
