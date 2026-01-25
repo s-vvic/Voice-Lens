@@ -30,7 +30,12 @@ if uploaded_file is not None:
                     st.success("분석 완료!")
                     st.markdown(f"### AI 해설\n{description}")
                     
-                    # (나중에 오디오 기능 추가되면 여기에 플레이어 넣음)
+                    # 오디오 기능: 백엔드에서 받은 audio_url로 음성 재생
+                    audio_url = result.get("audio_url")
+                    if audio_url:
+                        st.audio(audio_url, format="audio/mp3", start_time=0)
+                    else:
+                        st.warning("음성 파일을 재생할 수 없습니다.")
                 else:
                     st.error(f"서버 오류: {response.status_code}")
             

@@ -1,17 +1,17 @@
-# main.py
-
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-import shutil
+from fastapi.concurrency import run_in_threadpool
+import aiofiles
 import os
 import uuid
 import ai_service
+from tts_service import text_to_speech
 
 # create FastAPI app instance
 app = FastAPI(title="Voice-Lens API")
 
-# cors settings(it will be restricted later)
-# allow all origins for now(can be restricted later)
+# cors settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,53 +19,61 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# temporary upload directory
+
+# temporary directories
 UPLOAD_DIR = "temp_images"
-# if the upload directory does not exist, create it
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
+AUDIO_DIR = "temp_audio"
+for dir_path in [UPLOAD_DIR, AUDIO_DIR]:
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+# Mount static file directories
+app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
+
 
 @app.get("/")
 async def read_root():
     return {"message": "Voice-Lens API is running!"}
 
+
 @app.post("/analyze")
-async def analyze_image(file: UploadFile = File(...)):
-    # check if a file is provided
-    #file.content_type has the same values as 'image/jpeg', 'image/png'
+async def analyze_image(request: Request, file: UploadFile = File(...)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다.")
 
     try:
-        # prevent directory duplication attacks (use uuid for filename)
-        # ex: original.jpg -> sd89-f789-asdf-8978.jpg
-        file_extension = file.filename.split(".")[-1]  # extract file extension
+        file_extension = file.filename.split(".")[-1]
         unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        
-        # make the full file path
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-        # save the uploaded file to the temporary directory
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        async with aiofiles.open(file_path, "wb") as out_file:
+            content = await file.read()  # async read file
+            await out_file.write(content)
 
+        description = "오류: AI 분석에 실패했습니다."
+        audio_url = None
 
-        # call the AI service to get image description
         try:
-            description = ai_service.get_image_description(file_path)
+            # Run blocking I/O functions in a separate thread pool
+            description = await run_in_threadpool(ai_service.get_image_description, file_path)
+            audio_path = await run_in_threadpool(text_to_speech, description)
+            
+            audio_filename = os.path.basename(audio_path)
+            # Construct full URL: http://.../audio/filename.mp3
+            audio_url = f"{str(request.base_url).rstrip('/')}/audio/{audio_filename}"
+
         except Exception as e:
-            print(f"AI 분석 실패: {e}")
-            description = "죄송합니다. AI 분석 중 오류가 발생했습니다."
+            print(f"AI 또는 TTS 실패: {e}")
+            description = "죄송합니다. AI 분석 또는 음성 변환 중 오류가 발생했습니다."
+            # audio_url remains None
+
         return {
             "status": "success",
-            "original_filename": file.filename,
-            "saved_filename": unique_filename,
-            "file_path": file_path,
             "description": description,
-            "message": "파일이 안전하게 저장되었습니다."
+            "audio_url": audio_url,
+            "message": "파일이 안전하게 저장 및 처리되었습니다."
         }
 
     except Exception as e:
-        # if any error occurs during file saving
-        print(f"Error: {e}")  # server-side logging
-        raise HTTPException(status_code=500, detail="파일 저장 중 오류가 발생했습니다.")
+        print(f"파일 저장 오류: {e}")
+        raise HTTPException(status_code=500, detail="파일 처리 중 오류가 발생했습니다.")

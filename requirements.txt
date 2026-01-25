@@ -8,3 +8,5 @@ requests
 watchdog
 python-multipart
 Pillow
+gTTS
+aiofiles
